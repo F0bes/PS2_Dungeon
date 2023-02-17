@@ -1,6 +1,15 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include <kernel.h>
+#include <sifrpc.h>
+#include <loadfile.h>
+#include <tamtypes.h>
+
+#include <audsrv.h>
+
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
 #include "./constants.h"
 
 int running = FALSE;
@@ -25,8 +34,6 @@ SDL_Surface* QDB = NULL;
 SDL_Surface* EDB = NULL;
 SDL_Surface* BEC = NULL;
 
-Mix_Music* music = NULL;
-
 int colR,colL,colU,colD;
 
 struct game_object {
@@ -40,7 +47,7 @@ struct game_object {
 SDL_Rect player_rect;
 
 int Init(void) {
-	if ((SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) != 0)
+	if ((SDL_Init(SDL_INIT_VIDEO)) != 0)
 	{
 		fprintf(stderr, "Error in SDL_Init. \n");
 		return FALSE;
@@ -59,7 +66,6 @@ int Init(void) {
 	}
 
 	windowSurface = SDL_GetWindowSurface( window );
-	Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
 
 	return TRUE;
 }
@@ -72,8 +78,6 @@ void Setup(){
 	player.surface = SDL_LoadBMP( "Assets/player.bmp" );
 
 	Room = 1;
-	music = Mix_LoadMUS("song.mp3");
-	Mix_PlayMusic(music, -1);
 }
 
 void Input(){
@@ -178,9 +182,63 @@ void Draw(){
 	SDL_UpdateWindowSurface( window );
 }
 
+void Song(){
+	int ret;
+	FILE* adpcm;
+	audsrv_adpcm_t sample;
+	int size;
+	u8* buffer;
+
+	SifInitRpc(0);
+
+	printf("sample: kicking IRXs\n");
+	ret = SifLoadModule("rom0:LIBSD", 0, NULL);
+	printf("libsd loadmodule %d\n", ret);
+
+	printf("sample: loading audsrv\n");
+	ret = SifLoadModule("host:audsrv.irx", 0, NULL);
+	printf("audsrv loadmodule %d\n", ret);
+
+	ret = audsrv_init();
+	if (ret != 0)
+	{
+		printf("sample: failed to initialize audsrv\n");
+		printf("audsrv returned error string: %s\n", audsrv_get_error_string());
+		running = FALSE;
+	}
+
+	adpcm = fopen("host:Song/song.adp", "rb");
+
+	if (adpcm == NULL)
+	{
+		printf("failed to open adpcm file\n");
+		audsrv_quit();
+		running = FALSE;
+	}
+
+	fseek(adpcm, 0, SEEK_END);
+	size = ftell(adpcm);
+	fseek(adpcm, 0, SEEK_SET);
+
+	buffer = malloc(size);
+
+	fread(buffer, 1, size, adpcm);
+	fclose(adpcm);
+
+	printf("playing sample..\n");
+
+	audsrv_adpcm_init();
+	audsrv_set_volume(MAX_VOLUME);
+	audsrv_adpcm_set_volume(0, MAX_VOLUME);
+	audsrv_load_adpcm(&sample, buffer, size);
+	audsrv_ch_play_adpcm(0, &sample);
+
+	printf("sample played..\n");
+
+	free(buffer);
+}
+
 void Close(){
-    Mix_FreeMusic(music);
-    Mix_CloseAudio();
 	SDL_FreeSurface( windowSurface );
     windowSurface = NULL;
 	SDL_DestroyWindow(window);
@@ -192,6 +250,7 @@ int main(int argc, char *argv[]) {
 	running = Init();
 
 	Setup();
+	Song();
 	while (running) {
 		Input();
 		Update();

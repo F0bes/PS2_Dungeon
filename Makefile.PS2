@@ -1,11 +1,16 @@
 EE_BIN = main.elf
 EE_OBJS = src/main.o
-EE_LIBS := -L${PS2DEV}/gsKit/lib -L${PS2SDK}/ports/lib -lSDL2main -lSDL2 -lSDL2_mixer -lpatches -lgskit -ldmakit -lps2_drivers -lmodplug 
+EE_LIBS := -L${PS2DEV}/gsKit/lib -L${PS2SDK}/ports/lib -lSDL2main -lSDL2 -lSDL2_mixer -lpatches -lgskit -ldmakit -lps2_drivers -lmodplug -laudsrv -lc
 EE_INCS := -I${PS2SDK}/ports/include
 EE_CFLAGS += -DPS2 -Dmain=SDL_main -DHAVE_SDL2
 
-all: $(EE_BIN)
+all: $(EE_BIN) ./Song/song.adp audsrv.irx
     
+%.adp : %.wav
+	$(PS2SDK)/bin/adpenc $< $@
+
+audsrv.irx:
+	cp $(PS2SDK)/iop/irx/audsrv.irx $@
 
 clean:
 	rm -f $(EE_BIN) $(EE_OBJS)
