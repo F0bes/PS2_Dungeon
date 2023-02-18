@@ -47,18 +47,18 @@ struct game_object {
 SDL_Rect player_rect;
 
 int Init(void) {
-	if ((SDL_Init(SDL_INIT_VIDEO)) != 0)
+	if ((SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) != 0)
 	{
 		fprintf(stderr, "Error in SDL_Init. \n");
 		return FALSE;
 	}
 	window = SDL_CreateWindow(
-		"NULL",                 //Title
+		"NULL",                 // Title
 		SDL_WINDOWPOS_CENTERED, // X
 		SDL_WINDOWPOS_CENTERED, // Y
 		WINDOW_WIDTH,           // Width
 		WINDOW_HEIGHT,          // Height
-		SDL_WINDOW_BORDERLESS   //flags
+		SDL_WINDOW_BORDERLESS   // flags
 	);
 	if(!window){
 		fprintf(stderr,"Error creating SDL Window.\n");
@@ -66,6 +66,9 @@ int Init(void) {
 	}
 
 	windowSurface = SDL_GetWindowSurface( window );
+
+	SifInitRpc(0);
+	audsrv_init();
 
 	return TRUE;
 }
@@ -183,29 +186,10 @@ void Draw(){
 }
 
 void Song(){
-	int ret;
 	FILE* adpcm;
 	audsrv_adpcm_t sample;
 	int size;
 	u8* buffer;
-
-	SifInitRpc(0);
-
-	printf("sample: kicking IRXs\n");
-	ret = SifLoadModule("rom0:LIBSD", 0, NULL);
-	printf("libsd loadmodule %d\n", ret);
-
-	printf("sample: loading audsrv\n");
-	ret = SifLoadModule("host:audsrv.irx", 0, NULL);
-	printf("audsrv loadmodule %d\n", ret);
-
-	ret = audsrv_init();
-	if (ret != 0)
-	{
-		printf("sample: failed to initialize audsrv\n");
-		printf("audsrv returned error string: %s\n", audsrv_get_error_string());
-		running = FALSE;
-	}
 
 	adpcm = fopen("host:Song/song.adp", "rb");
 
@@ -239,6 +223,7 @@ void Song(){
 }
 
 void Close(){
+	audsrv_quit();
 	SDL_FreeSurface( windowSurface );
     windowSurface = NULL;
 	SDL_DestroyWindow(window);
