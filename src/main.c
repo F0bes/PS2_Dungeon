@@ -10,6 +10,7 @@
 #include <audsrv.h>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_gamecontroller.h>
 #include "./constants.h"
 
 int running = FALSE;
@@ -36,6 +37,8 @@ SDL_Surface* BEC = NULL;
 
 int colR,colL,colU,colD;
 
+SDL_GameController* controller;
+
 struct game_object {
 	float x;
 	float y;
@@ -47,7 +50,7 @@ struct game_object {
 SDL_Rect player_rect;
 
 int Init(void) {
-	if ((SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) != 0)
+	if ((SDL_Init(SDL_INIT_EVERYTHING)) != 0)
 	{
 		fprintf(stderr, "Error in SDL_Init. \n");
 		return FALSE;
@@ -69,6 +72,13 @@ int Init(void) {
 
 	SifInitRpc(0);
 	audsrv_init();
+
+	controller = SDL_GameControllerOpen(0);
+	if(controller == NULL){ 
+		printf("Failed to open the game controller!\n");
+		running = FALSE;
+	}else 
+		printf("Controller OK!\n");
 
 	return TRUE;
 }
@@ -97,16 +107,20 @@ void Input(){
 			break;
 	}
 
-	const Uint8* keystate = SDL_GetKeyboardState(NULL); 
+	// Get the state of buttons
+    const SDL_GameControllerButton UpState = SDL_GameControllerGetButton(controller,11);
+    const SDL_GameControllerButton DownState = SDL_GameControllerGetButton(controller,12);
+    const SDL_GameControllerButton LeftState = SDL_GameControllerGetButton(controller,13);
+    const SDL_GameControllerButton RightState = SDL_GameControllerGetButton(controller,14); 
 
-	if(keystate[SDL_SCANCODE_RIGHT] && colR != TRUE)
-		player.x += 320 * delta_time;
-	if(keystate[SDL_SCANCODE_LEFT]  && colL != TRUE)
-		player.x -= 320 * delta_time;
-	if(keystate[SDL_SCANCODE_DOWN]  && colD != TRUE)
-		player.y += 320 * delta_time;
-	if(keystate[SDL_SCANCODE_UP]    && colU != TRUE)
-		player.y -= 320 * delta_time;
+	if(RightState == SDL_PRESSED && colR != TRUE)
+		player.x += 100 * delta_time;
+	if(LeftState == SDL_PRESSED  && colL != TRUE)
+		player.x -= 100 * delta_time;
+	if(DownState == SDL_PRESSED  && colD != TRUE)
+		player.y += 100 * delta_time;
+	if(UpState == SDL_PRESSED    && colU != TRUE)
+		player.y -= 100 * delta_time;
 }
 
 void Update(){
@@ -224,6 +238,7 @@ void Song(){
 
 void Close(){
 	audsrv_quit();
+	SDL_GameControllerClose(controller);
 	SDL_FreeSurface( windowSurface );
     windowSurface = NULL;
 	SDL_DestroyWindow(window);
