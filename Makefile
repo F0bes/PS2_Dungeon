@@ -4,10 +4,7 @@ EE_LIBS := -L${PS2DEV}/gsKit/lib -L${PS2SDK}/ports/lib -lSDL2main -lSDL2 -lSDL2_
 EE_INCS := -I${PS2SDK}/ports/include
 EE_CFLAGS += -DPS2 -Dmain=SDL_main -DHAVE_SDL2
 
-all: $(EE_BIN) ./Song/song.adp
-    
-%.adp : %.wav
-	$(PS2SDK)/bin/adpenc $< $@
+all: $(EE_BIN) 
 
 clean:
 	rm -f $(EE_BIN) $(EE_OBJS)

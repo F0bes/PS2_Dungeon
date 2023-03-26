@@ -1,262 +1,229 @@
 #include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-#include <kernel.h>
-#include <sifrpc.h>
-#include <loadfile.h>
-#include <tamtypes.h>
-
-#include <audsrv.h>
-
+#include <stdbool.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_gamecontroller.h>
 #include "./constants.h"
-
-int running = FALSE;
+#define SDL_MAIN_HANDLED
+///////////////////////////////////////////////////////////////////////////////
+// Global variables
+///////////////////////////////////////////////////////////////////////////////
+int game_is_running = false;
 SDL_Window* window = NULL;
-SDL_Surface* windowSurface = NULL;
-
+SDL_Renderer* renderer = NULL;
 int last_frame_time = 0;
-float delta_time;
-
-int Room;
-SDL_Surface* P = NULL;
-SDL_Surface* F = NULL;
-SDL_Surface* PTT = NULL;
-SDL_Surface* PTB = NULL;
-SDL_Surface* PTL = NULL;
-SDL_Surface* TLB = NULL;
-SDL_Surface* LBC = NULL;
-SDL_Surface* EBC = NULL;
-SDL_Surface* ETL = NULL;
-SDL_Surface* ELB = NULL;
-SDL_Surface* QDB = NULL;
-SDL_Surface* EDB = NULL;
-SDL_Surface* BEC = NULL;
-
-int colR,colL,colU,colD;
 
 SDL_GameController* controller;
+float delta_time;
+///////////////////////////////////////////////////////////////////////////////
 
+SDL_Surface* Splayer = NULL;
+SDL_Texture* Tplayer = NULL;
+
+SDL_Surface* Ssala1 = NULL;
+SDL_Texture* Tsala1 = NULL;
+
+///////////////////////////////////////////////////////////////////////////////
+// Declare two game objects for the ball and the paddle
+///////////////////////////////////////////////////////////////////////////////
 struct game_object {
-	float x;
-	float y;
-	float width;
-	float height;
-	SDL_Surface* surface;
-} player;
+    float x;
+    float y;
+    float width;
+    float height;
+    float vel_x;
+    float vel_y;
+} ball, paddle;
 
-SDL_Rect player_rect;
-
-int Init(void) {
-	if ((SDL_Init(SDL_INIT_EVERYTHING)) != 0)
-	{
-		fprintf(stderr, "Error in SDL_Init. \n");
-		return FALSE;
-	}
-	window = SDL_CreateWindow(
-		"NULL",                 // Title
-		SDL_WINDOWPOS_CENTERED, // X
-		SDL_WINDOWPOS_CENTERED, // Y
-		WINDOW_WIDTH,           // Width
-		WINDOW_HEIGHT,          // Height
-		SDL_WINDOW_BORDERLESS   // flags
-	);
-	if(!window){
-		fprintf(stderr,"Error creating SDL Window.\n");
-		return FALSE;
-	}
-
-	windowSurface = SDL_GetWindowSurface( window );
-
-	SifInitRpc(0);
-	audsrv_init();
-
-	controller = SDL_GameControllerOpen(0);
-	if(controller == NULL){ 
-		printf("Failed to open the game controller!\n");
-		running = FALSE;
-	}else 
-		printf("Controller OK!\n");
-
-	return TRUE;
+///////////////////////////////////////////////////////////////////////////////
+// Function to initialize our SDL window
+///////////////////////////////////////////////////////////////////////////////
+int initialize_window(void) {
+    if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
+        fprintf(stderr, "Error initializing SDL.\n");
+        return false;
+    }
+    window = SDL_CreateWindow(
+        NULL,
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        WINDOW_WIDTH,
+        WINDOW_HEIGHT,
+        SDL_WINDOW_BORDERLESS
+    );
+    if (!window) {
+        fprintf(stderr, "Error creating SDL Window.\n");
+        return false;
+    }
+    renderer = SDL_CreateRenderer(window, -1, 0);
+    if (!renderer) {
+        fprintf(stderr, "Error creating SDL Renderer.\n");
+        return false;
+    }
+    controller = SDL_GameControllerOpen(0);
+    if(controller == NULL){ 
+        printf("Failed to open the game controller!\n");
+        return false;
+    }else 
+        printf("Controller OK!\n");
+    return true;
 }
 
-void Setup(){
-	player.x = 64;
-	player.y = 64;
-	player.width = 64;
-	player.height = 64;
-	player.surface = SDL_LoadBMP( "Assets/player.bmp" );
+///////////////////////////////////////////////////////////////////////////////
+// Function to poll SDL events and process keyboard input
+///////////////////////////////////////////////////////////////////////////////
+void process_input(void) {
+    SDL_Event event;
+    SDL_PollEvent(&event);
+    switch (event.type) {
+        case SDL_QUIT:
+            game_is_running = false;
+            break;
+        case SDL_KEYDOWN:
+            if (event.key.keysym.sym == SDLK_ESCAPE)
+                game_is_running = false;
+            if (event.key.keysym.sym == SDLK_LEFT)
+                paddle.vel_x = -400;
+            if (event.key.keysym.sym == SDLK_RIGHT)
+                paddle.vel_x = +400;
+            break;
+        case SDL_KEYUP:
+            if (event.key.keysym.sym == SDLK_LEFT)
+                paddle.vel_x = 0;
+            if (event.key.keysym.sym == SDLK_RIGHT)
+                paddle.vel_x = 0;
+            break;
+    }
 
-	Room = 1;
-}
-
-void Input(){
-	SDL_Event event;
-	SDL_PollEvent(&event);
-
-	switch (event.type){
-		case SDL_QUIT:
-			running = FALSE;
-			break;
-		case SDL_KEYDOWN:
-			if(event.key.keysym.sym == SDLK_ESCAPE)
-				running = FALSE;
-			break;
-	}
-
-	// Get the state of buttons
     const SDL_GameControllerButton UpState = SDL_GameControllerGetButton(controller,11);
     const SDL_GameControllerButton DownState = SDL_GameControllerGetButton(controller,12);
     const SDL_GameControllerButton LeftState = SDL_GameControllerGetButton(controller,13);
     const SDL_GameControllerButton RightState = SDL_GameControllerGetButton(controller,14); 
 
-	if(RightState == SDL_PRESSED && colR != TRUE)
-		player.x += 100 * delta_time;
-	if(LeftState == SDL_PRESSED  && colL != TRUE)
-		player.x -= 100 * delta_time;
-	if(DownState == SDL_PRESSED  && colD != TRUE)
-		player.y += 100 * delta_time;
-	if(UpState == SDL_PRESSED    && colU != TRUE)
-		player.y -= 100 * delta_time;
+    if(RightState == SDL_PRESSED)
+        paddle.x += 400 * delta_time;
+    if(LeftState == SDL_PRESSED)
+        paddle.x -= 400 * delta_time;
+    if(UpState == SDL_PRESSED)
+        paddle.y -= 400 * delta_time;
+    if(DownState == SDL_PRESSED)
+        paddle.y += 400 * delta_time;
 }
 
-void Update(){
-	//while (!SDL_TICKS_PASSED(SDL_GetTicks(),last_frame_time + FRAME_TARGET_TIME));
-	int time_to_wait = FRAME_TARGET_TIME - (SDL_GetTicks() - last_frame_time);
-	if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME)
-	{
-		SDL_Delay(time_to_wait);
-	}
-	
-	delta_time = (SDL_GetTicks() - last_frame_time) / 1000.0f;
-	last_frame_time = SDL_GetTicks();
+///////////////////////////////////////////////////////////////////////////////
+// Setup function that runs once at the beginning of our program
+///////////////////////////////////////////////////////////////////////////////
+void Nsetup(void) {
+    // Initialize values for the the ball object
+    ball.width = 15;
+    ball.height = 15;
+    ball.x = 20;
+    ball.y = 20;
+    ball.vel_x = 300;
+    ball.vel_y = 300;
 
-	player.width = 64;
-	player.height = 64;
+    // Initialize the values for the paddle object
+    paddle.width = 100;
+    paddle.height = 20;
+    paddle.x = (WINDOW_WIDTH / 2) - (paddle.width / 2);
+    paddle.y = WINDOW_HEIGHT - 40;
 
-	if(Room == 1){
-		SDL_Rect col1 = {0,0,24,WINDOW_HEIGHT};
-		SDL_Rect col2 = {0,0,WINDOW_WIDTH,80};
-		SDL_Rect col3 = {0,WINDOW_HEIGHT-24,WINDOW_WIDTH,24};
-		SDL_Rect col4 = {WINDOW_WIDTH-24,0,24,WINDOW_HEIGHT};
-		if(SDL_HasIntersection(&player_rect, &col1)){colL = TRUE;}else{colL = FALSE;}
-		if(SDL_HasIntersection(&player_rect, &col2)){colU = TRUE;}else{colU = FALSE;}
-		if(SDL_HasIntersection(&player_rect, &col3)){colD = TRUE;}else{colD = FALSE;}
-		if(SDL_HasIntersection(&player_rect, &col4)){colR = TRUE;}else{colR = FALSE;}
-	}
+    Splayer = SDL_LoadBMP("Assets/player.bmp");
+    Tplayer = SDL_CreateTextureFromSurface(renderer, Splayer);
+    SDL_FreeSurface(Splayer);
+    //SDL_SetTextureBlendMode(Tplayer, SDL_BLENDMODE_BLEND);
+    //SDL_SetTextureAlphaMod(Tplayer,100);
+
+    Ssala1 = SDL_LoadBMP("Assets/sala1.bmp");
+    Tsala1 = SDL_CreateTextureFromSurface(renderer, Ssala1);
+    SDL_FreeSurface(Ssala1);
 }
 
-void Draw(){
+///////////////////////////////////////////////////////////////////////////////
+// Update function with a fixed time step
+///////////////////////////////////////////////////////////////////////////////
+void update(void) {
+    // Calculate how much we have to wait until we reach the target frame time
+    int time_to_wait = FRAME_TARGET_TIME - (SDL_GetTicks() - last_frame_time);
 
-	if(P == NULL){
-		P   = SDL_LoadBMP( "Assets/P.bmp" );
-		F   = SDL_LoadBMP( "Assets/F.bmp" );
-		PTT = SDL_LoadBMP( "Assets/PTT.bmp" );
-		PTB = SDL_LoadBMP( "Assets/PTB.bmp" );
-		PTL = SDL_LoadBMP( "Assets/PTL.bmp" );
-		TLB = SDL_LoadBMP( "Assets/TLB.bmp" );
-		LBC = SDL_LoadBMP( "Assets/LBC.bmp" );
-		EBC = SDL_LoadBMP( "Assets/EBC.bmp" );
-		ETL = SDL_LoadBMP( "Assets/ETL.bmp" );
-		ELB = SDL_LoadBMP( "Assets/ELB.bmp" );
-		QDB = SDL_LoadBMP( "Assets/QDB.bmp" );
-		EDB = SDL_LoadBMP( "Assets/EDB.bmp" );
-		BEC = SDL_LoadBMP( "Assets/BEC.bmp" );
-	}
-	SDL_Surface* Sala01[7][10] = {
-        {PTL,PTT,PTT,PTT,PTT,PTT,PTT,PTT,PTT,ETL},
-        {TLB,PTB,PTB,PTB,PTB,PTB,PTB,PTB,PTB,ELB},
-        {LBC, F , F , F , F , F , F , F , F ,EBC},
-        {LBC, F , F , F , F , F , F , F , F ,EBC},
-        {LBC, F , F , F , F , F , F , F , F ,EBC},
-        {LBC, F , F , F , F , F , F , F , F ,EBC},
-        {QDB,BEC,BEC,BEC,BEC,BEC,BEC,BEC,BEC,EDB}
-    };
+    // Only delay if we are too fast too update this frame
+    if (time_to_wait > 0 && time_to_wait <= FRAME_TARGET_TIME)
+        SDL_Delay(time_to_wait);
 
-	SDL_Rect clearRect = {0,0,WINDOW_WIDTH,WINDOW_HEIGHT};
-    SDL_FillRect(windowSurface,&clearRect,SDL_MapRGB(windowSurface->format,0,0,0));
+    // Get a delta time factor converted to seconds to be used to update my objects
+    delta_time = (SDL_GetTicks() - last_frame_time) / 1000.0;
 
-	for (int y = 0; y < 7; ++y)
-    {
-        for (int x = 0; x < 10; ++x)
-        {
-            SDL_Rect asdf = {x*64,y*64,64,64};
-            if(Room == 1)
-            SDL_BlitScaled(Sala01[y][x], NULL, windowSurface, &asdf);
-        }
+    // Store the milliseconds of the current frame
+    last_frame_time = SDL_GetTicks();
+
+    // update ball and paddle position
+    ball.x += ball.vel_x * delta_time;
+    ball.y += ball.vel_y * delta_time;
+
+    // Check for ball collision with the walls
+    if (ball.x <= 0 || ball.x + ball.width >= WINDOW_WIDTH)
+        ball.vel_x = -ball.vel_x;
+    if (ball.y < 0)
+        ball.vel_y = -ball.vel_y;
+
+    // Check for ball collision with the paddle
+    if (ball.y + ball.height >= paddle.y && ball.x + ball.width >= paddle.x && ball.x <= paddle.x + paddle.width)
+        ball.vel_y = -ball.vel_y;
+
+    // Prevent paddle from moving outside the boundaries of the window
+    if (paddle.x <= 0)
+        paddle.x = 0;
+    if (paddle.x >= WINDOW_WIDTH - paddle.width)
+        paddle.x = WINDOW_WIDTH - paddle.width;
+
+    // Check for game over
+    if (ball.y + ball.height > WINDOW_HEIGHT) {
+        ball.x = WINDOW_WIDTH / 2;
+        ball.y = 0;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Render function to draw game objects in the SDL window
+///////////////////////////////////////////////////////////////////////////////
+void render(void) {
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    SDL_Rect Rsala1 = {0,0, WINDOW_WIDTH, WINDOW_HEIGHT};
+    SDL_RenderCopy(renderer, Tsala1, NULL, &Rsala1);
+
+    SDL_Rect Rplayer = {paddle.x,paddle.y, 64, 64};
+    SDL_RenderCopy(renderer, Tplayer, NULL, &Rplayer);
+
+    SDL_RenderPresent(renderer);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Function to destroy SDL window and renderer
+///////////////////////////////////////////////////////////////////////////////
+void destroy_window(void) {
+    SDL_DestroyTexture(Tplayer);
+    SDL_DestroyTexture(Tsala1);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Main function
+///////////////////////////////////////////////////////////////////////////////
+int main(int argc, char* args[]) {
+    game_is_running = initialize_window();
+
+    Nsetup();
+
+    while (game_is_running) {
+        process_input();
+        update();
+        render();
     }
 
-    player_rect.x = player.x;
-    player_rect.y = player.y;
-    player_rect.w = player.width;
-    player_rect.h = player.height;
+    destroy_window();
 
-    SDL_BlitScaled(player.surface, NULL, windowSurface, &player_rect);
-
-	SDL_UpdateWindowSurface( window );
-}
-
-void Song(){
-	FILE* adpcm;
-	audsrv_adpcm_t sample;
-	int size;
-	u8* buffer;
-
-	adpcm = fopen("host:Song/song.adp", "rb");
-
-	if (adpcm == NULL)
-	{
-		printf("failed to open adpcm file\n");
-		audsrv_quit();
-		running = FALSE;
-	}
-
-	fseek(adpcm, 0, SEEK_END);
-	size = ftell(adpcm);
-	fseek(adpcm, 0, SEEK_SET);
-
-	buffer = malloc(size);
-
-	fread(buffer, 1, size, adpcm);
-	fclose(adpcm);
-
-	printf("playing sample..\n");
-
-	audsrv_adpcm_init();
-	audsrv_set_volume(MAX_VOLUME);
-	audsrv_adpcm_set_volume(0, MAX_VOLUME);
-	audsrv_load_adpcm(&sample, buffer, size);
-	audsrv_ch_play_adpcm(0, &sample);
-
-	printf("sample played..\n");
-
-	free(buffer);
-}
-
-void Close(){
-	audsrv_quit();
-	SDL_GameControllerClose(controller);
-	SDL_FreeSurface( windowSurface );
-    windowSurface = NULL;
-	SDL_DestroyWindow(window);
-	SDL_Quit();
-}
-
-int main(int argc, char *argv[]) {
-
-	running = Init();
-
-	Setup();
-	Song();
-	while (running) {
-		Input();
-		Update();
-		Draw();
-	}
-	Close();
-
-	return 0;
+    return 0;
 }
