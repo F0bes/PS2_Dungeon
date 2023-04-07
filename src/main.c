@@ -35,6 +35,31 @@ struct game_object {
 } ball, paddle;
 
 ///////////////////////////////////////////////////////////////////////////////
+// Function to fix the improper TEXA value set by gsKit internally
+///////////////////////////////////////////////////////////////////////////////
+#include <tamtypes.h>
+void fix_texa_value(void)
+{
+    qword_t draw_packet[2] __aligned(16);
+    qword_t* q = draw_packet;
+
+    q->dw[0] = 0x1000000000008001u; // GIF_TAG
+    q->dw[1] = 0x0E; // Write to AD register
+    q++;
+    // TEXA
+	q->dw[0] = (u64)0x80 << 32; // TA1 = 0x80 AEM = 0 TA0 = 0 
+	q->dw[1] = 0x3B; // TEXA register
+	q++;
+
+    *((vu32*)0x1000a010) = (u32)&draw_packet[0]; // Point the channel to our data
+    *((vu32*)0x1000a020) = 2; // # of qwords (2)
+
+    *((vu32*)0x1000a000) = 0x100; // Run the DMA channel
+
+    while(*((vu32*)0x1000a000) & 0x100); // Wait for DMA transfer
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Function to initialize our SDL window
 ///////////////////////////////////////////////////////////////////////////////
 int initialize_window(void) {
@@ -216,6 +241,8 @@ int main(int argc, char* args[]) {
     game_is_running = initialize_window();
 
     Nsetup();
+
+    fix_texa_value();
 
     while (game_is_running) {
         process_input();
